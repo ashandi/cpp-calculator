@@ -3,23 +3,93 @@
 
 using namespace std;
 
+int number_of_errors = 0;
+double error(const char* message);
+
 enum token_value {
     NAME, NUMBER, END,
     PLUS='+', MINUS='-', MULTIPLICATION='*', DIVISION='/',
     PRINT=';', ASSIGN='=', LEFT_BRACKET='(', RIGHT_BRACKET=')'
 };
 
-token_value get_token();
+class Token
+{
+public:
+    token_value kind;
+    double d_value;
+    string s_value;
+    Token(token_value t):
+        kind(t) {}
+    Token(token_value t, double value):
+        kind(t), d_value(value) {}
+    Token(token_value t, string value):
+        kind(t), s_value(value) {}
+};
+
+class TokenBuffer
+{
+public:
+    TokenBuffer():
+        buffer_not_empty(false), buffer(PRINT) {}
+    Token get();
+    void putback(Token t);
+private:
+    bool buffer_not_empty;
+    Token buffer;
+};
+
+Token TokenBuffer::get()
+{
+    if(buffer_not_empty) {
+        buffer_not_empty = false;
+        return buffer;
+    }
+
+    char sign;
+    do {
+        if (!cin.get(sign))
+            return Token(END);
+    } while (sign != '\n' && isspace(sign));
+
+    switch (sign) {
+    case ';': case '\n':
+        return Token(PRINT);
+    case '0': case '1': case '2': case '3': case '4': case '5':
+    case '6': case '7': case '8': case '9': case '.': {
+        cin.putback(sign);
+        double val;
+        cin >> val;
+        return Token(NUMBER, val);
+    }
+    case '+': case '-': case '/': case '*':
+    case '(': case ')': case '=':
+        return Token(token_value(sign));
+    default:
+        if (isalpha(sign))
+        {
+            string str;
+            str += sign;
+            while(cin.get(sign) && isalnum(sign))
+            {
+                str += sign;
+            }
+            cin.putback(sign);
+            return Token(NAME, str);
+        }
+        error("Incorrect sign!");
+        return Token(PRINT);
+    }
+}
+
+void TokenBuffer::putback(Token t)
+{
+    buffer = t;
+    buffer_not_empty = true;
+}
+
 double expression();
 double term();
 double prim();
-
-token_value current_token;
-double number_value;
-char name_string[256];
-
-int number_of_errors = 0;
-double error(const char* message);
 
 struct name {
     char* string;
@@ -27,11 +97,16 @@ struct name {
     double value;
 };
 
-const int table_size = 23;
+const int table_size = 32;
 name* table[table_size];
 
 name* insert(const char* name);
 name* look(const char* name, bool insert = false);
+
+const char* prompt = ">";
+const char* result = "=";
+
+TokenBuffer token_buffer = TokenBuffer();
 
 int main()
 {
@@ -40,15 +115,18 @@ int main()
 
     while(true)
     {
-        cout << ">";
+        cout << prompt;
 
-        get_token();
-        if (current_token == END)
-            break;
-        if (current_token == PRINT)
+        Token t = token_buffer.get();
+
+        if (t.kind == PRINT)
             continue;
+        if (t.kind == END)
+            break;
 
-        cout << expression() << endl;
+        token_buffer.putback(t);
+
+        cout << result << expression() << endl;
     }
 
     return 0;
@@ -57,19 +135,21 @@ int main()
 double expression()
 {
     double left = term();
+    Token t = token_buffer.get();
 
     while(true)
     {
-        switch (current_token) {
+        switch (t.kind) {
         case PLUS:
-            get_token();
             left += term();
+            t = token_buffer.get();
             break;
         case MINUS:
-            get_token();
             left -= term();
+            t = token_buffer.get();
             break;
         default:
+            token_buffer.putback(t);
             return left;
         }
     }
@@ -78,23 +158,25 @@ double expression()
 double term()
 {
     double left = prim();
+    Token t = token_buffer.get();
 
     while(true)
     {
-        switch(current_token) {
+        switch(t.kind) {
         case MULTIPLICATION:
-            get_token();
             left *= prim();
+            t = token_buffer.get();
             break;
         case DIVISION:{
-            get_token();
             double d = prim();
             if (d == 0)
                 return error("Division by zero!");
             left /= d;
+            t = token_buffer.get();
             break;
         }
         default:
+            token_buffer.putback(t);
             return left;
        }
     }
@@ -102,71 +184,35 @@ double term()
 
 double prim()
 {
-    switch(current_token) {
+    Token t = token_buffer.get();
+    switch(t.kind) {
     case NUMBER:
-        get_token();
-        return number_value;
-    case NAME:
-        if (get_token() == ASSIGN)
+        return t.d_value;
+    case NAME: {
+        string var = t.s_value;
+        t = token_buffer.get();
+        if (t.kind == ASSIGN)
         {
-            name *n = insert(name_string);
-            get_token();
+            name *n = insert(var.c_str());
             n->value = expression();
             return n->value;
         }
-        return look(name_string)->value;
+        token_buffer.putback(t);
+        return look(var.c_str())->value;
+    }
     case MINUS:
-        get_token();
         return -prim();
     case LEFT_BRACKET: {
-        get_token();
         double e = expression();
-        if (current_token != RIGHT_BRACKET)
+        t = token_buffer.get();
+        if (t.kind != RIGHT_BRACKET)
             return error("Expected \')\'");
-        get_token();
         return e;
     }
     case END:
         return 1;
     default:
         return error("Undefined sign!");
-    }
-}
-
-token_value get_token()
-{
-    char sign;
-    do {
-        if (!cin.get(sign))
-            return current_token = END;
-    } while (sign != '\n' && isspace(sign));
-
-    switch (sign) {
-    case ';': case '\n':
-        return current_token = PRINT;
-    case '0': case '1': case '2': case '3': case '4': case '5':
-    case '6': case '7': case '8': case '9': case '.':
-        cin.putback(sign);
-        cin >> number_value;
-        return current_token = NUMBER;
-    case '+': case '-': case '/': case '*':
-    case '(': case ')': case '=':
-        return current_token = token_value(sign);
-    default:
-        if (isalpha(sign))
-        {
-            char *p = name_string;
-            *p++ = sign;
-            while(cin.get(sign) && isalnum(sign))
-            {
-                *p++ = sign;
-            }
-            cin.putback(sign);
-            *p = 0;
-            return current_token = NAME;
-        }
-        error("Incorrect sign!");
-        return current_token = PRINT;
     }
 }
 
