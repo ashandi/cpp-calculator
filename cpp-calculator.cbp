@@ -13,6 +13,7 @@
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-g" />
+					<Add option="-D_GLIBCXX_USE_CXX11_ABI=0" />
 				</Compiler>
 			</Target>
 			<Target title="Release">
@@ -31,8 +32,17 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
+			<Add option="-D_GLIBCXX_USE_CXX11_ABI=0" />
 		</Compiler>
+		<Unit filename="error.cpp" />
+		<Unit filename="error.h" />
+		<Unit filename="functions.cpp" />
+		<Unit filename="functions.h" />
 		<Unit filename="main.cpp" />
+		<Unit filename="table.cpp" />
+		<Unit filename="table.h" />
+		<Unit filename="token.cpp" />
+		<Unit filename="token.h" />
 		<Extensions>
 			<code_completion />
 			<envvars />
